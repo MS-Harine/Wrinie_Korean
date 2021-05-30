@@ -47,6 +47,8 @@ def draw_single_char(ch, font_path, canvas_size, show_img=False):
 		return None
 	
 	image = add_padding(tight_crop_image(np.asarray(image)), canvas_size)
+	if len(image.shape) == 2:
+		image = np.expand_dims(image, axis=0)
 
 	if show_img:
 		img = Image.fromarray(image)
