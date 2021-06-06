@@ -41,21 +41,21 @@ class Encoder(nn.Module):
 		encode_layers = dict()
 
 		e1 = self.conv1(images)
-		encode_layers['e1'] = e1
+		encode_layers['e1'] = e1.clone()
 		e2 = self.conv2(e1)
-		encode_layers['e2'] = e2
+		encode_layers['e2'] = e2.clone()
 		e3 = self.conv3(e2)
-		encode_layers['e3'] = e3
+		encode_layers['e3'] = e3.clone()
 		e4 = self.conv4(e3)
-		encode_layers['e4'] = e4
+		encode_layers['e4'] = e4.clone()
 		e5 = self.conv5(e4)
-		encode_layers['e5'] = e5
+		encode_layers['e5'] = e5.clone()
 		e6 = self.conv6(e5)
-		encode_layers['e6'] = e6
+		encode_layers['e6'] = e6.clone()
 		e7 = self.conv7(e6)
-		encode_layers['e7'] = e7
+		encode_layers['e7'] = e7.clone()
 		encoded_source = self.conv8(e7)
-		encode_layers['e8'] = encoded_source
+		encode_layers['e8'] = encoded_source.clone()
 
 		return encoded_source, encode_layers
 

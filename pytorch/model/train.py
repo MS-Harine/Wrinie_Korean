@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import time
 import datetime
@@ -9,6 +10,8 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader, random_split
 from torchvision.utils import save_image
+
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
 from model.models import Generator, Discriminator, Encoder, Decoder, StyleVector
 from data.word_dataset import WordImageDataset
@@ -24,6 +27,7 @@ class Trainer:
 			self.style_vec = StyleVector(dataset.get_categories())
 		else:
 			self.style_vec = torch.load(os.path.join(embedding_dir, '4_StyleVec.pt'))
+		self.style_vec = self.style_vec.to(self.device)
 	
 	def train(self, freeze_encoder=False, restore_files=None, save_model_dir=None, save_img_path=None,
 			  epochs=10, batch_size=4, log_step=100, sample_step=1000, model_save_epoch=5, **kwargs):
@@ -43,9 +47,9 @@ class Trainer:
 			discriminator.load_state_dict(torch.load(os.path.join(self.model_dir, discriminator_path)))
 		
 		# Losses
-		l1_criterion = nn.L1Loss(size_average=True).to(self.device)
-		bce_criterion = nn.BCEWithLogitsLoss(size_average=True).to(self.device)
-		mse_criterion = nn.MSELoss(size_average=True).to(self.device)
+		l1_criterion = nn.L1Loss(reduction='mean').to(self.device)
+		bce_criterion = nn.BCEWithLogitsLoss(reduction='mean').to(self.device)
+		mse_criterion = nn.MSELoss(reduction='mean').to(self.device)
 		
 		# Optimizer
 		if freeze_encoder:
@@ -67,6 +71,7 @@ class Trainer:
 				# Forward Propagation
 				# Generate fake image
 				fake_target, encoded_source, _ = Generator(encoder, decoder, source, self.style_vec, style_idx)
+				fake_target = fake_target.detach()
 
 				# Scoring with Discriminator
 				real_TS = torch.cat([source, real_target], dim=1)
@@ -108,14 +113,15 @@ class Trainer:
 				
 				
 				# Back Propagation
-				discriminator.zero_grad()
-				d_loss.backward(retain_graph=True)
-				d_optimizer.step()
-
 				encoder.zero_grad()
 				decoder.zero_grad()
 				g_loss.backward(retain_graph=True)
 				g_optimizer.step()
+
+				if step % 5 == 0:
+					discriminator.zero_grad()
+					d_loss.backward()
+					d_optimizer.step()
 
 				# History loss
 				l1_losses.append(int(l1_loss.data))
@@ -125,20 +131,23 @@ class Trainer:
 				g_losses.append(int(g_loss.data))
 
 				# Logging
-				if (i + 1) % log_step == 0:
+				if (step + 1) % log_step == 0:
 					time_stamp = datetime.datetime.fromtimestamp(time.time()).strftime('%H:%M:%S')
 					log_format = 'Epoch [%d/%d], step [%d/%d], l1_loss: %.4f, d_loss: %.4f, g_loss: %.4f' % \
 								 (epoch + 1, epochs, i + 1, len(data_loader), l1_loss.item(), d_loss.item(), g_loss.item())
 					print(time_stamp, log_format)
 				
 				# Save image
-				if (i + 1) % sample_step == 0 and save_img_path:
+				if (step + 1) % sample_step == 0 and save_img_path:
 					with torch.no_grad():
-						fixed_source = self.dataset[0][0].to(self.device)
-						fixed_fake_image = Generator(fixed_source)[0]
-						save_image(((fixed_fake_image + 1) / 2).clamp(0, 1), \
-								   os.path.join(save_img_path, 'fake_samples-%d-%d.png' % \
-															   (epoch + 1, i + 1)))
+						fixed_source = np.tile(self.dataset[0][0], (1, self.dataset.get_categories()))
+						print(fixed_source.shape)
+						fixed_source = torch.from_numpy(fixed_source).to(self.device)
+						fixed_fake_image = Generator(encoder, decoder, fixed_source, self.style_vec, np.arange(self.dataset.get_categories()))[0]
+						for f in range(len(fixed_fake_image)):
+							save_image(((fixed_fake_image[f] + 1) / 2).clamp(0, 1), os.path.join(save_img_path, 'fake_samples_%02d-%d-%d.png' % (f, epoch + 1, i + 1)))
+
+				step += 1
 
 			# Save model
 			if (epoch + 1) % model_save_epoch == 0 and save_model_dir:

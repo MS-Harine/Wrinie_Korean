@@ -12,6 +12,8 @@ class WordImageDataset(Dataset):
 		self.size = size
 		self.transform = transform
 
+		print("Dataset: %d words x %d fonts = %d data" % (len(self.string), len(self.target_fonts), len(self)))
+
 	def __len__(self):
 		return len(self.string) * len(self.target_fonts)
 
